@@ -13,6 +13,7 @@ use App\Http\Requests\AUTH\RegisterRequest;
 use App\Http\Services\AUTH\RegisterService;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -20,18 +21,11 @@ class AuthController extends Controller
 {
     protected $registerService;
 
-    /**
-     * @param RegisterService $registerService
-     */
     public function __construct(RegisterService $registerService)
     {
         $this->registerService = $registerService;
     }
 
-
-    /**
-     * @throws \Throwable
-     */
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -41,7 +35,11 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 401);
+            return response()->json([
+                'status' => 'failed',
+                'message' => $validator->errors(),
+                'payload' => []
+            ], 401);
         }
 
         DB::beginTransaction();
@@ -50,7 +48,7 @@ class AuthController extends Controller
 
             DB::commit();
             return response()->json([
-                'success' => true,
+                'status' => 'success',
                 'message' => 'Data Successfully saved',
                 'payload' => [
                     'token' => $token,
@@ -61,5 +59,32 @@ class AuthController extends Controller
             DB::rollBack();
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    public function login(Request $request)
+    {
+
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
+
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Invalid password',
+                'payload' => []
+            ], 401);
+        }
+        $user = $request->user();
+        $token = $user->createToken('API Token')->plainTextToken;
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User is valid',
+            'payload' => [
+                'token' => $token,
+                'data' => null,
+            ]
+        ], 200);
     }
 }
